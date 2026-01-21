@@ -18,8 +18,7 @@ WORKDIR /home/forge/ray
 
 COPY . .
 
-# Mounting cache dir for faster local rebuilds (architecture-specific to avoid toolchain conflicts)
-RUN --mount=type=cache,target=/home/forge/.cache,uid=2000,gid=100,id=bazel-cache-${HOSTTYPE}-${PYTHON_VERSION} \
+RUN --mount=type=cache,target=/home/forge/.cache,uid=2000,gid=100,id=ray-bazel-cache-${HOSTTYPE} \
     <<'EOF'
 #!/bin/bash
 set -euo pipefail
@@ -31,7 +30,8 @@ export RAY_BUILD_ENV="manylinux_py${PY_BIN}"
 sudo ln -sf "/opt/python/${PY_BIN}/bin/python3" /usr/local/bin/python3
 sudo ln -sf /usr/local/bin/python3 /usr/local/bin/python
 
-if [[ "${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
+# Disable remote cache uploads for local builds or read-only mode
+if [[ -z "${BUILDKITE_BAZEL_CACHE_URL:-}" || "${BUILDKITE_CACHE_READONLY:-}" == "true" ]]; then
   echo "build --remote_upload_local_results=false" >> "$HOME/.bazelrc"
 fi
 
