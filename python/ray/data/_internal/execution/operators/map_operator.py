@@ -923,6 +923,7 @@ class _OrderedOutputQueue(_OutputQueue):
         self._completed_tasks: Set[int] = set()
         self._size_bytes: int = 0
         self._num_blocks: int = 0
+        self._finished: bool = False
 
     def notify_task_output_ready(self, task_index: int, output: RefBundle):
         self._task_outputs[task_index].append(output)
@@ -937,27 +938,37 @@ class _OrderedOutputQueue(_OutputQueue):
         """
         assert len(self._task_outputs[self._current_output_index]) == 0
         assert self._current_output_index in self._completed_tasks
+
         del self._task_outputs[self._current_output_index]
+
         self._completed_tasks.remove(self._current_output_index)
-        self._current_output_index += 1
+
+        if self._task_outputs:
+            self._current_output_index += 1
+        else:
+            self._current_output_index = -1
+            self._finished = True
 
     def notify_task_completed(self, task_index: int):
         assert task_index >= self._current_output_index
         self._completed_tasks.add(task_index)
-        if task_index == self._current_output_index:
-            if len(self._task_outputs[task_index]) == 0:
-                self._move_to_next_task()
 
     def has_next(self) -> bool:
-        return len(self._task_outputs[self._current_output_index]) > 0
+        if self._finished:
+            return False
+
+        if (
+            len(self._task_outputs[self._current_output_index]) == 0 and
+            self._current_output_index in self._completed_tasks
+        ):
+            self._move_to_next_task()
+
+        return True
 
     def get_next(self) -> RefBundle:
         next_bundle = self._task_outputs[self._current_output_index].popleft()
         self._size_bytes -= next_bundle.size_bytes()
         self._num_blocks -= len(next_bundle.blocks)
-        if len(self._task_outputs[self._current_output_index]) == 0:
-            if self._current_output_index in self._completed_tasks:
-                self._move_to_next_task()
         return next_bundle
 
     def num_blocks(self) -> int:
